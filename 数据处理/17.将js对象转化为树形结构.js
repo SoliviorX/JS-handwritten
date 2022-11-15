@@ -1,0 +1,70 @@
+/**
+ * 功能目标
+ */
+// 转换前：
+source = [
+  {
+    id: 1,
+    parentId: 0,
+    name: "body",
+  },
+  {
+    id: 2,
+    parentId: 1,
+    name: "title",
+  },
+  {
+    id: 3,
+    parentId: 2,
+    name: "div",
+  },
+];
+// 转换为:
+tree = [
+  {
+    id: 1,
+    parentId: 0,
+    name: "body",
+    children: [
+      {
+        id: 2,
+        parentId: 1,
+        name: "title",
+        children: [
+          {
+            id: 3,
+            parentId: 2,
+            name: "div",
+          },
+        ],
+      },
+    ],
+  },
+];
+
+/**
+ * 实现
+ */
+function jsonToTree(data) {
+  // 初始化结果数组，并判断输入数据的格式
+  let result = [];
+  if (!Array.isArray(data)) {
+    return result;
+  }
+  // 使用map，将当前对象的id与当前对象对应存储起来
+  let map = {};
+  data.forEach((item) => {
+    map[item.id] = item;
+  });
+  data.forEach((item) => {
+    let parent = map[item.parentId];
+    if (parent) {
+      // 设置parent的children属性
+      (parent.children || (parent.children = [])).push(item);
+    } else {
+      result.push(item);
+    }
+  });
+  return result;
+}
+console.log(jsonToTree(data));
