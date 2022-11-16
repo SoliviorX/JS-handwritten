@@ -1,106 +1,81 @@
+/**
+ * Promise特点
+    1，创建时需要传递一个函数，否则会报错
+    2，会给传入的函数设置两个回调函数
+    3，刚创建的Promise对象状态是pending
+    4，状态一旦发生改变就不可再次改变
+    5，可以通过then来监听状态的改变
+      5.1，如果创建监听时，状态已经改变，立即执行监听回调
+      5.2，如果创建监听时，状态未改变，会等状态改变后执行
+      5.3，同一promise对象可以添加多个then监听，状态改变时按照注册顺序依次执行
+ */
 const PENDING = "pending";
-const RESOLVED = "resolved";
+const FULFILLED = "fulfilled";
 const REJECTED = "rejected";
 
-function MyPromise(fn) {
-  // 保存初始化状态
-  var self = this;
-
-  // 初始化状态
-  this.state = PENDING;
-
-  // 用于保存 resolve 或者 rejected 传入的值
-  this.value = null;
-
-  // 用于保存 resolve 的回调函数
-  this.resolvedCallbacks = [];
-
-  // 用于保存 reject 的回调函数
-  this.rejectedCallbacks = [];
-
-  // 状态转变为 resolved 方法
-  function resolve(value) {
-    // 判断传入元素是否为 Promise 值，如果是，则状态改变必须等待前一个状态改变后再进行改变
-    if (value instanceof MyPromise) {
-      return value.then(resolve, reject);
+class MyPromise {
+  constructor(handle) {
+    // 3，刚创建的Promise对象状态是pending
+    this.status = PENDING;
+    // 成功回调的值
+    this.value = undefined;
+    // 失败回调的值
+    this.reason = undefined;
+    // 注册的成功回调
+    this.onResolvedCallbacks = [];
+    // 注册的失败回调
+    this.onRejectedCallbacks = [];
+    // 1，创建时需要传递一个函数，否则会报错
+    if (!this._isFunction(handle)) {
+      throw new Error("请传入一个函数");
     }
-
-    // 保证代码的执行顺序为本轮事件循环的末尾
-    setTimeout(() => {
-      // 只有状态为 pending 时才能转变，
-      if (self.state === PENDING) {
-        // 修改状态
-        self.state = RESOLVED;
-
-        // 设置传入的值
-        self.value = value;
-
-        // 执行回调函数
-        self.resolvedCallbacks.forEach((callback) => {
-          callback(value);
-        });
-      }
-    }, 0);
+    // 2，会给传入的函数设置两个回调函数
+    handle(this._resolve.bind(this), this._reject.bind(this));
   }
-
-  // 状态转变为 rejected 方法
-  function reject(value) {
-    // 保证代码的执行顺序为本轮事件循环的末尾
-    setTimeout(() => {
-      // 只有状态为 pending 时才能转变
-      if (self.state === PENDING) {
-        // 修改状态
-        self.state = REJECTED;
-
-        // 设置传入的值
-        self.value = value;
-
-        // 执行回调函数
-        self.rejectedCallbacks.forEach((callback) => {
-          callback(value);
-        });
-      }
-    }, 0);
+  _resolve(value) {
+    // 4，状态一旦发生改变就不可再次改变
+    if (this.status === PENDING) {
+      this.status = FULFILLED;
+      this.value = value;
+      // 5.3，同一promise对象可以添加多个then监听，状态改变时按照注册顺序依次执行
+      this.onResolvedCallbacks.forEach((fn) => fn(this.value));
+    }
   }
-
-  // 将两个方法传入函数执行
-  try {
-    fn(resolve, reject);
-  } catch (e) {
-    // 遇到错误时，捕获错误，执行 reject 函数
-    reject(e);
+  _reject(reason) {
+    // 4，状态一旦发生改变就不可再次改变
+    if (this.status === PENDING) {
+      this.status = REJECTED;
+      this.reason = reason;
+      // 5.3，同一promise对象可以添加多个then监听，状态改变时按照注册顺序依次执行
+      this.onRejectedCallbacks.forEach((fn) => fn(this.reason));
+    }
+  }
+  then(onResolved, onRejected) {
+    // 判断有没有传入成功的回调
+    if (this._isFunction(onResolved)) {
+      // 5.1，如果创建监听时，状态已经改变，立即执行监听回调
+      if (this.status === FULFILLED) {
+        onResolved(this.value);
+      }
+    }
+    // 判断有没有传入失败的回调
+    if (this._isFunction(onRejected)) {
+      // 5.1，如果创建监听时，状态已经改变，立即执行监听回调
+      if (this.status === REJECTED) {
+        onRejected(this.reason);
+      }
+    }
+    // 5.2，如果创建监听时，状态未改变，会等状态改变后执行
+    if (this.status === PENDING) {
+      if (this._isFunction(onResolved)) {
+        this.onResolvedCallbacks.push(onResolved);
+      }
+      if (this._isFunction(onRejected)) {
+        this.onRejectedCallbacks.push(onRejected);
+      }
+    }
+  }
+  _isFunction(fn) {
+    return typeof fn === "function";
   }
 }
-
-MyPromise.prototype.then = function (onResolved, onRejected) {
-  // 首先判断两个参数是否为函数类型，因为这两个参数是可选参数
-  onResolved =
-    typeof onResolved === "function"
-      ? onResolved
-      : function (value) {
-          return value;
-        };
-
-  onRejected =
-    typeof onRejected === "function"
-      ? onRejected
-      : function (error) {
-          throw error;
-        };
-
-  // 如果是等待状态，则将函数加入对应列表中
-  if (this.state === PENDING) {
-    this.resolvedCallbacks.push(onResolved);
-    this.rejectedCallbacks.push(onRejected);
-  }
-
-  // 如果状态已经凝固，则直接执行对应状态的函数
-
-  if (this.state === RESOLVED) {
-    onResolved(this.value);
-  }
-
-  if (this.state === REJECTED) {
-    onRejected(this.value);
-  }
-};
